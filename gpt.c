@@ -9,7 +9,7 @@ int main(){
 	int x = 0;
 
 	x = add(a,b);
-	printf("%d\n", x);
+	printf("%d and %d makes %d\n", a,b,x);
 };
 
 int add(int x, int y){
