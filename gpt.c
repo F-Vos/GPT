@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <math.h>
 
-void add(int x,int y){};
+int add(int x, int y);
 
 int main(){
 	int a = 5;
@@ -9,8 +9,9 @@ int main(){
 	int x = 0;
 
 	x = add(a,b);
+	printf("%d\n", x);
 };
 
-void add(int x, int y){
+int add(int x, int y){
 	return x+y;
 }
