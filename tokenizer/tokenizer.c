@@ -2,14 +2,17 @@
 #include <stdlib.h>
 
 #define MAX_TEXT_LENGTH 10000
-#define MAX_VOCAB 500
-
-
+#define MAX_VOCAB 2000
 
 typedef struct {
-    int merged_token;
+    int first_token;
+    int second_token;
+} Token;
+
+typedef struct {
     int original_first_token;
     int original_second_token;
+    int merged_token;
 } MergeInfo;
 
 void encode_text(const char *filename, int *id, int *length) {
@@ -32,37 +35,39 @@ void encode_text(const char *filename, int *id, int *length) {
     *length = j;
 }
 
+void find_common_tokens(int *id, int length, Token *most_common_token) {
+    int max_count = 0;
+    int max_index = -1;
 
-void create_token_list(int *id, int length, int (*count)[3]){
-	for(int i=0;i<length-1;i++){
-		count[i][0] = id[i];
-		count[i][1] = id[i+1];
-		count[i][2] = 0;
-	}
-}
+    for (int i = 0; i < length - 1; i++) {
+        int first_token = id[i];
+        int second_token = id[i + 1];
+        int count = 1;
 
-void find_common_tokens(int length, int (*count)[3]){
-	for(int i=0;i<length-1;i++) {
-        if(count[i][2] == -1) {
-            continue; 
+        for (int j = i + 1; j < length - 1; j++) {
+            if (id[j] == first_token && id[j + 1] == second_token) {
+                count++;
+            }
         }
 
-        for(int j=i+1;j<length-1;j++) {
-            if(count[j][0] == count[i][0] && count[j][1] == count[i][1]) {
-				++count[i][2];
-				count[j][2] = -1; // Mark as counted
-            }
+        if (count > max_count) {
+            max_count = count;
+            max_index = i;
         }
     }
 
+    most_common_token->first_token = id[max_index];
+    most_common_token->second_token = id[max_index + 1];
 }
 
-void merge_tokens(int *id, int *length, int (*count)[3], MergeInfo *merge_info, int *merge_count) {
+void merge_tokens(int *id, int *length, MergeInfo *merge_info, int *merge_count) {
     int num_merges = 0;
 
     for (int i = 0; i < *length - 1 && num_merges < MAX_VOCAB && *merge_count < MAX_TEXT_LENGTH - 1; i++) {
-        int first_token = count[i][0];
-        int second_token = count[i][1];
+		Token most_common_token;
+        find_common_tokens(id, *length, &most_common_token);
+		int first_token = most_common_token.first_token;
+        int second_token = most_common_token.second_token;
         int new_token = i + 128; // Assign a new token for the merged pair
         num_merges++;
 
@@ -83,76 +88,60 @@ void merge_tokens(int *id, int *length, int (*count)[3], MergeInfo *merge_info, 
                     id[k - 1] = id[k];
                 }
                 (*length)--; // Decrease the length of the text
-
-                // Recursive call to merge_tokens to check for further merges
-                merge_tokens(id, length, count, merge_info, merge_count);
-                return; // Exit the function after recursive call
             }
         }
     }
 }
 
 void unmerge_tokens(int *id, int *length, MergeInfo *merge_info, int merge_count) {
-    for (int i = 0; i < merge_count; i++) {
-        int merged_token = merge_info[i].merged_token;
-        int original_first_token = merge_info[i].original_first_token;
-        int original_second_token = merge_info[i].original_second_token;
+    // Flag to keep track of whether any tokens were unmerged in this iteration
+    int unmerged = 0;
 
-        for (int j = 0; j < *length; j++) {
-            if (id[j] == merged_token) {
-                // Replace the merged token with the original tokens
-                id[j] = original_first_token;
-                
-                // Shift subsequent tokens to the right to make space for the second token
-                for (int k = *length - 1; k > j; k--) {
-                    id[k + 1] = id[k];
+    // Iterate through the merged tokens and replace them with the original tokens
+    do {
+        unmerged = 0; // Reset the unmerged flag at the beginning of each iteration
+
+        for (int i = 0; i < merge_count; i++) {
+            // Find the merged token in the text and replace it with the original tokens
+            for (int j = 0; j < *length; j++) {
+                if (id[j] == merge_info[i].merged_token) {
+                    // Replace the merged token with the original first token
+                    id[j] = merge_info[i].original_first_token;
+
+                    // Shift subsequent tokens to the right to make space for the second token
+                    for (int k = *length; k > j + 1; k--) {
+                        id[k] = id[k - 1];
+                    }
+
+                    // Insert the original second token after the first token
+                    id[j + 1] = merge_info[i].original_second_token;
+
+                    // Increment the length of the text
+                    (*length)++;
+
+                    // Set the unmerged flag to indicate that a token was unmerged
+                    unmerged = 1;
                 }
-                id[j + 1] = original_second_token;
-                (*length)++;            }
-        }
-    }
-}
-
-
-void bubble_sort(int (*arr)[3], int size) {
-    for (int i = 0; i < size - 1; i++) {
-        for (int j = 0; j < size - i - 1; j++) {
-            if (arr[j][2] < arr[j + 1][2]) {
-                int temp0 = arr[j][0];
-                int temp1 = arr[j][1];
-                int temp2 = arr[j][2];
-                arr[j][0] = arr[j + 1][0];
-                arr[j][1] = arr[j + 1][1];
-                arr[j][2] = arr[j + 1][2];
-                arr[j + 1][0] = temp0;
-                arr[j + 1][1] = temp1;
-                arr[j + 1][2] = temp2;
             }
         }
-    }
+    } while (unmerged); // Continue looping until no more tokens are unmerged
 }
 
 int main() {
 	int length = 0;	
     int id[MAX_TEXT_LENGTH];
-    int count[MAX_TEXT_LENGTH][3];
-    int input_char;
+	int input_char;
 	MergeInfo merge_info[MAX_TEXT_LENGTH - 1];	
     // Encode the text
     encode_text("taylor.txt", id, &length);
 
-    // Create token list
-    create_token_list(id, length, count);
-
-    // Find common tokens
-    find_common_tokens(length, count);
 
     // Sort the pairs based on counts
-    bubble_sort(count, length - 1);
 	int merge_count = 0;
-	merge_tokens(id, &length, count, merge_info, &merge_count);
+	merge_tokens(id, &length, merge_info, &merge_count);
 	for (int i = 0; i < length; i++) {
         printf("%c", id[i]);
+		
     }
 	unmerge_tokens(id, &length, merge_info, merge_count);
 	printf("\n\n\n");
@@ -161,5 +150,13 @@ int main() {
 	}
 	printf("\n");
 
+	// Calculate compression ratio
+    float original_length = (float)length;
+    float compressed_length = length - (float)merge_count;
+    float compression_ratio = original_length / compressed_length;
+
+	printf("Original Length: %.0f\n", original_length);
+    printf("Compressed Length: %.0f\n", compressed_length);
+    printf("Compression Ratio: %.2f\n", compression_ratio);
     return 0;
 }
