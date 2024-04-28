@@ -195,23 +195,42 @@ void rerank_vocab(const char *vocab_file_name){
     fclose(vocab_file_w);
 }
 
+char *encode(const char *input_string, const char *vocab_file_name);
+char *decode(const char *encoded_string, const char *vocab_file_name);
+void demo(const char *input_string, const char *vocab_file_name);
+
 int main(int argc, char *argv[]) {
     if (argc < 4) {
-        printf("Usage: %s train <input_file> <vocab file>\n", argv[0]);
+        printf("Usage: %s <option> <input_string> <vocab_file>\n", argv[0]);
+        printf("Options:\n");
+        printf("  train   Train the model\n");
+        printf("  encode  Encode the input string\n");
+        printf("  decode  Decode the input string\n");
+        printf("  demo    Encode and decode the input string\n");
         return 1;
     }
 
-    char *input_file_name = argv[2];
+    char *option = argv[1];
+    char *input_string = argv[2];
     char *vocab_file_name = argv[3];
 
-    FILE *input_file = fopen(input_file_name, "r");
-    if (input_file == NULL) {
-        printf("Failed to open input file.\n");
+    if (strcmp(option, "train") == 0) {
+        FILE *input_file = fopen(input_string, "r");
+        if (input_file == NULL) {
+            printf("Failed to open input file.\n");
+            return 1;
+        }
+        train(input_file, vocab_file_name);
+    } else if (strcmp(option, "encode") == 0) {
+		return 1;
+    } else if (strcmp(option, "decode") == 0) {
+		return 1;
+    } else if (strcmp(option, "demo") == 0) {
+		return 1;
+    } else {
+        printf("Invalid option.\n");
         return 1;
     }
 
-    train(input_file, vocab_file_name);
-	
-	rerank_vocab(vocab_file_name);
     return 0;
-}  
+}
