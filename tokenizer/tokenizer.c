@@ -81,8 +81,15 @@ void train(FILE *input_file, const char *vocab_file_name) {
         printf("%d %d %d %d\n", vocab[i][0], vocab[i][1], vocab[i][2], vocab[i][3]);
     }
     printf("\n");
-
-    while (num_merges < MAX_VOCAB) {
+	
+	// Open vocab_file in write mode to write updated vocabulary
+    FILE *vocab_file_w = fopen(vocab_file_name, "w");
+    if (vocab_file_w == NULL) {
+		printf("Failed to open vocabulary file for writing.\n");
+		return;
+    }
+    
+	while (num_merges < MAX_VOCAB) {
         find_common_tokens(id, length, &most_common_token);
         int first_int = most_common_token.first_int;
         int second_int = most_common_token.second_int;
@@ -104,13 +111,8 @@ void train(FILE *input_file, const char *vocab_file_name) {
                 }
                 if (!found) {
                     // Insert new entry into vocabulary
-					printf("Vocab size %d\n", vocab_size);
-					for(int l=0; l < vocab_size; l++){
-						printf("%d ", vocab[l][1]);
-					}
                     vocab[vocab_size][0] = 1;
 					if(vocab[vocab_size -1][1] < 128){
-						printf("yes");
 						vocab[vocab_size][1] = 128;
 					} else {
 						vocab[vocab_size][1] = (vocab[vocab_size - 1][1]) + 1; 
@@ -129,25 +131,16 @@ void train(FILE *input_file, const char *vocab_file_name) {
                     id[j - 1] = id[j];
                 }
                 length--; // Decrease the length of the text
-
             }
         }
-
-		// Open vocab_file in write mode to write updated vocabulary
-        FILE *vocab_file = fopen(vocab_file_name, "w");
-        if (vocab_file == NULL) {
-            printf("Failed to open vocabulary file for writing.\n");
-            return;
-        }
-        // Write to vocab_file
-        for (int i = 0; i < vocab_size; i++) {
-            fprintf(vocab_file, "%d %d %d %d\n", vocab[i][0], vocab[i][1], vocab[i][2], vocab[i][3]);
-        }
-        printf("Merging (%d, %d) -> %d\n", first_int, second_int, new_token);
+		printf("Merging (%d, %d) -> %d\n", first_int, second_int, new_token);
         num_merges++;
     }
-
-    fclose(vocab_file);
+    // Write to vocab_file
+    for (int i = 0; i < vocab_size; i++) {
+		fprintf(vocab_file_w, "%d %d %d %d\n", vocab[i][0], vocab[i][1], vocab[i][2], vocab[i][3]);
+    }
+    fclose(vocab_file_w);
     printf("Model trained and saved.\n");
 }
 
@@ -184,19 +177,20 @@ void rerank_vocab(const char *vocab_file_name){
             }
         }
     }
+	int new_value = 128;
 	for (int i = 0; i < vocab_size; i++) {
-        vocab[i][1] = i + 128;
+        vocab[i][1] = new_value++;
     }	
 	
 	// Open vocab_file in write mode to write updated vocabulary
 	FILE *vocab_file_w = fopen(vocab_file_name, "w");
-    if (vocab_file == NULL) {
+    if (vocab_file_w == NULL) {
         printf("Failed to open vocabulary file for writing.\n");
         return;
     }
     // Write to vocab_file
     for (int i = 0; i < vocab_size; i++) {
-        fprintf(vocab_file, "%d %d %d %d\n", vocab[i][0], vocab[i][1], vocab[i][2], vocab[i][3]);
+        fprintf(vocab_file_w, "%d %d %d %d\n", vocab[i][0], vocab[i][1], vocab[i][2], vocab[i][3]);
     }
     fclose(vocab_file_w);
 }
@@ -217,6 +211,7 @@ int main(int argc, char *argv[]) {
     }
 
     train(input_file, vocab_file_name);
+	
 	rerank_vocab(vocab_file_name);
     return 0;
 }  
