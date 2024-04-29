@@ -195,9 +195,92 @@ void rerank_vocab(const char *vocab_file_name){
     fclose(vocab_file_w);
 }
 
-char *encode(const char *input_string, const char *vocab_file_name);
-char *decode(const char *encoded_string, const char *vocab_file_name);
-void demo(const char *input_string, const char *vocab_file_name);
+void encode(const char *input_string, const char *vocab_file_name) {
+    int vocab[TOTAL_VOCAB_SIZE][4];
+    int vocab_size = 0;
+    FILE *vocab_file = fopen(vocab_file_name, "r");
+    if (vocab_file == NULL) {
+        printf("Failed to open vocabulary file for reading.\n");
+        return;
+    }
+
+    while (fscanf(vocab_file, "%d %d %d %d", &vocab[vocab_size][0], &vocab[vocab_size][1], &vocab[vocab_size][2], &vocab[vocab_size][3]) == 4 && vocab_size < TOTAL_VOCAB_SIZE) {
+        vocab_size++;
+    }
+    fclose(vocab_file);
+
+    int id[MAX_TEXT_LENGTH];
+	int output[MAX_TEXT_LENGTH];
+    int length = 0;
+	int output_length = 0;
+	int character_count = 0;
+    for (int i = 0; input_string[i] != '\0' && length < MAX_TEXT_LENGTH; i++) {
+        id[length++] = input_string[i];
+		character_count++;
+	}
+
+    while(length >= 2) {
+		int max_count = 0;
+		int max_index = -1;
+
+		for (int i = 0; i < length - 1; i++) {
+			int first_int = id[i];
+			int second_int = id[i + 1];
+			int count = 1;
+
+			for (int j = i + 1; j < length - 1; j++) {
+				if (id[j] == first_int && id[j + 1] == second_int) {
+					count++;
+				}
+			}
+
+			if (count > max_count) {
+				for(int k = 0; k < vocab_size; k++){
+					if(first_int == vocab[k][2] && second_int == vocab[k][3]){
+						max_count = count;
+						max_index = i;
+					}
+				}
+			}
+		}
+		int first_int = id[max_index];
+		int second_int = id[max_index + 1];
+        int new_token = 0;
+		int unknown_vocab = 1;
+		for(int i = 0; i < vocab_size; i++){
+			if(first_int == vocab[i][2] && second_int == vocab[i][3]){
+				new_token = vocab[i][1];
+				unknown_vocab = 0;
+				for (int i = 0; i < length - 1; i++) {
+					if (id[i] == first_int && id[i + 1] == second_int) {	
+						id[i] = new_token;
+						for (int k = i + 2; k < length; k++) {
+							id[k - 1] = id[k];
+						}
+						length--;
+						break;
+					}
+				} 			
+			}
+		}
+		if (unknown_vocab){
+			break;	
+		}   
+    }
+	int token_count = 0;
+	for(int i=0;i<length;i++){
+		token_count++;
+		if(id[i] < 127){
+			printf("%c ", id[i]);
+		} else{
+			printf("%d ", id[i]);
+		}
+	}
+	printf("\n");
+	printf("Characters: %d\n", character_count);
+	printf("Tokens: %d\n", token_count);
+}
+
 
 int main(int argc, char *argv[]) {
     if (argc < 4) {
@@ -222,10 +305,10 @@ int main(int argc, char *argv[]) {
         }
         train(input_file, vocab_file_name);
     } else if (strcmp(option, "encode") == 0) {
+		encode(input_string, vocab_file_name);
+	} else if (strcmp(option, "decode") == 0) {
 		return 1;
-    } else if (strcmp(option, "decode") == 0) {
-		return 1;
-    } else if (strcmp(option, "demo") == 0) {
+	} else if (strcmp(option, "demo") == 0) {
 		return 1;
     } else {
         printf("Invalid option.\n");
