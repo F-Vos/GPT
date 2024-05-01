@@ -3,9 +3,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#define MAX_TEXT_LENGTH 10000
-#define MAX_VOCAB 400
-#define TOTAL_VOCAB_SIZE 100240
+#define MAX_TEXT_LENGTH 70000
+#define MAX_VOCAB 14000
+#define TOTAL_VOCAB_SIZE 50257 //50257
 
 typedef struct {
     int first_int;
@@ -54,7 +54,7 @@ void train(FILE *input_file, const char *vocab_file_name) {
     }
     fclose(input_file);
 
-    int vocab[TOTAL_VOCAB_SIZE][4];
+    int vocab[MAX_TEXT_LENGTH + TOTAL_VOCAB_SIZE][4];
 	int vocab_size = 0;
 
     FILE *vocab_file = fopen(vocab_file_name, "r");
@@ -145,7 +145,8 @@ void train(FILE *input_file, const char *vocab_file_name) {
 }
 
 void rerank_vocab(const char *vocab_file_name){
-	int vocab[TOTAL_VOCAB_SIZE][4];
+	printf("Reranking completed\n");
+	int vocab[MAX_TEXT_LENGTH + TOTAL_VOCAB_SIZE][4];
 	int vocab_size = 0;
 	FILE *vocab_file = fopen(vocab_file_name, "r");
     if (vocab_file == NULL) {
@@ -189,10 +190,68 @@ void rerank_vocab(const char *vocab_file_name){
         return;
     }
     // Write to vocab_file
-    for (int i = 0; i < vocab_size; i++) {
+    for (int i = 0; i < TOTAL_VOCAB_SIZE; i++) {
         fprintf(vocab_file_w, "%d %d %d %d\n", vocab[i][0], vocab[i][1], vocab[i][2], vocab[i][3]);
     }
     fclose(vocab_file_w);
+}
+
+void decode_single_token(int token, const char *vocab_file_name) {
+    int vocab[TOTAL_VOCAB_SIZE][4];
+    int vocab_size = 0;
+    FILE *vocab_file = fopen(vocab_file_name, "r");
+    if (vocab_file == NULL) {
+        printf("Failed to open vocabulary file for reading.\n");
+        return;
+    }
+
+    while (fscanf(vocab_file, "%d %d %d %d", &vocab[vocab_size][0], &vocab[vocab_size][1], &vocab[vocab_size][2], &vocab[vocab_size][3]) == 4 && vocab_size < TOTAL_VOCAB_SIZE) {
+        vocab_size++;
+    }
+    fclose(vocab_file);
+
+    int id[MAX_TEXT_LENGTH];
+	int output[MAX_TEXT_LENGTH];
+    int length = 0;
+	int output_length = 0;
+	int character_count = 0;
+	for(int i = 0; i < vocab_size; i++){
+		if(token == vocab[i][1]){
+			id[length++] = vocab[i][2];
+			id[length++] = vocab[i][3];
+			break;
+		} else if(i == vocab_size){
+			printf("Sadly not found in vocab");
+			break;
+		}
+	}
+	
+	for(int i = 0; i < length; i++){
+		if(id[i] >= 128){
+			for(int j = 0; j < vocab_size; j++){
+				if(id[i] == vocab[j][1]){
+					id[i] = vocab[j][2];
+					length++;
+					for (int k = length-1; k>i; k--) {
+						id[k] = id[k - 1];
+					}
+					id[i + 1] = vocab[j][3];
+					break;
+				} else if (j == vocab_size - 1) {
+					printf("Token not in vocab!!\n");
+					return;
+				}
+			}
+		}
+	}
+	for(int i=0;i<length;i++){
+		if(id[i] < 127){
+			printf("%c", id[i]);
+		} else{
+			printf("%d ", id[i]);
+		}
+	}
+	printf("|");
 }
 
 void encode(const char *input_string, const char *vocab_file_name) {
@@ -214,12 +273,15 @@ void encode(const char *input_string, const char *vocab_file_name) {
     int length = 0;
 	int output_length = 0;
 	int character_count = 0;
+	printf("\n");
     for (int i = 0; input_string[i] != '\0' && length < MAX_TEXT_LENGTH; i++) {
         id[length++] = input_string[i];
 		character_count++;
+		printf("%c", input_string[i]);
 	}
-
-    while(length >= 2) {
+	printf("\n");
+    
+	while(length >= 2) {
 		int max_count = 0;
 		int max_index = -1;
 
@@ -271,16 +333,15 @@ void encode(const char *input_string, const char *vocab_file_name) {
 	for(int i=0;i<length;i++){
 		token_count++;
 		if(id[i] < 127){
-			printf("%c ", id[i]);
+			printf("%c|", id[i]);
 		} else{
-			printf("%d ", id[i]);
+			decode_single_token(id[i], vocab_file_name);
 		}
 	}
 	printf("\n");
 	printf("Characters: %d\n", character_count);
 	printf("Tokens: %d\n", token_count);
 }
-
 
 int main(int argc, char *argv[]) {
     if (argc < 4) {
@@ -304,10 +365,11 @@ int main(int argc, char *argv[]) {
             return 1;
         }
         train(input_file, vocab_file_name);
+		rerank_vocab(vocab_file_name);
     } else if (strcmp(option, "encode") == 0) {
 		encode(input_string, vocab_file_name);
 	} else if (strcmp(option, "decode") == 0) {
-		return 1;
+		decode_single_token(atoi(input_string), vocab_file_name);
 	} else if (strcmp(option, "demo") == 0) {
 		return 1;
     } else {
